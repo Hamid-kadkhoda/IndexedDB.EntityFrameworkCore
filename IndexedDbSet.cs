@@ -8,11 +8,11 @@ public class IndexedDbSet<TEntity> where TEntity : class
 {
     private string _storeName;
 
-    private List<TEntity> _added { get; set; } = [];
+    private List<TEntity> Added { get; set; } = [];
 
-    private List<TEntity> _modified { get; set; } = [];
+    private List<TEntity> Modified { get; set; } = [];
 
-    private List<TEntity> _deleted { get; set; } = [];
+    private List<TEntity> Deleted { get; set; } = [];
 
     private IJSObjectReference? _module;
 
@@ -29,29 +29,29 @@ public class IndexedDbSet<TEntity> where TEntity : class
     // Add entity
     public void Add(TEntity entity)
     {
-        _added.Add(entity);
+        Added.Add(entity);
     }
 
     public void AddRange(IEnumerable<TEntity> entities)
     {
-        _added.AddRange(entities);
+        Added.AddRange(entities);
     }
 
     // Update entity
     public void Update(TEntity entity)
     {
-        _modified.Add(entity);
+        Modified.Add(entity);
     }
 
     // Remove entity
     public void Remove(TEntity entity)
     {
-        _deleted.Add(entity);
+        Deleted.Add(entity);
     }
 
     public void RemoveRange(IEnumerable<TEntity> entities)
     {
-        _deleted.AddRange(entities);
+        Deleted.AddRange(entities);
     }
 
     // Find by ID
@@ -90,7 +90,7 @@ public class IndexedDbSet<TEntity> where TEntity : class
     public async Task<bool> AnyAsync(Expression<Func<TEntity, bool>>? predicate = null)
     {
         var all = await ToListAsync();
-        return predicate == null ? all.Any() : all.AsQueryable().Any(predicate);
+        return predicate == null ? all.Count != 0 : all.AsQueryable().Any(predicate);
     }
 
     // Count equivalent
@@ -107,7 +107,7 @@ public class IndexedDbSet<TEntity> where TEntity : class
         int changeCount = 0;
 
         // Add
-        foreach (var entity in _added)
+        foreach (var entity in Added)
         {
             var json = JsonSerializer.Serialize(entity);
             await module.InvokeVoidAsync(IndexedDbContext_Consts.AddRecord, _storeName, json);
@@ -115,7 +115,7 @@ public class IndexedDbSet<TEntity> where TEntity : class
         }
 
         // Update
-        foreach (var entity in _modified)
+        foreach (var entity in Modified)
         {
             var json = JsonSerializer.Serialize(entity);
             await module.InvokeVoidAsync(IndexedDbContext_Consts.UpdateRecord, _storeName, json);
@@ -123,7 +123,7 @@ public class IndexedDbSet<TEntity> where TEntity : class
         }
 
         // Delete
-        foreach (var entity in _deleted)
+        foreach (var entity in Deleted)
         {
             var idProp = typeof(TEntity).GetProperty("Id");
             if (idProp != null)
@@ -134,9 +134,9 @@ public class IndexedDbSet<TEntity> where TEntity : class
             }
         }
 
-        _added.Clear();
-        _modified.Clear();
-        _deleted.Clear();
+        Added.Clear();
+        Modified.Clear();
+        Deleted.Clear();
 
         return changeCount;
     }

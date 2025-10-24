@@ -106,20 +106,19 @@ public abstract class IndexedDbContext : IAsyncDisposable
                     var dbSet = prop.GetValue(this);
                     if (dbSet != null)
                     {
-                        var saveMethod = prop.PropertyType.GetMethod("SaveChangesAsync");
+                        var saveMethod = prop.PropertyType.GetMethod(nameof(IndexedDbSet<object>.SaveChangesAsync));
                         if (saveMethod != null)
                         {
-                            var task = (Task<int>)saveMethod.Invoke(dbSet, new object[] { _module })!;
+                            var task = (Task<int>)saveMethod.Invoke(dbSet, [_module])!;
                             changeCount += await task;
                         }
                     }
                 }
             }
         }
-        catch (System.Runtime.InteropServices.JavaScript.JSException jsEx)
+        catch (Exception ex)
         {
-            throw new InvalidOperationException(
-                $"Failed to save changes. Ensure database is initialized. Error: {jsEx.Message}", jsEx);
+            throw new InvalidOperationException($"Failed to save changes. Ensure database is initialized. Error: {ex.Message}", ex);
         }
 
         return changeCount;
