@@ -6,7 +6,7 @@ namespace IndexedDB.EntityFrameworkCore;
 
 public class IndexedDbSet<TEntity> where TEntity : class
 {
-    private string _storeName;
+    private string _storeName = null!;
 
     private List<TEntity> Added { get; set; } = [];
 
@@ -16,9 +16,9 @@ public class IndexedDbSet<TEntity> where TEntity : class
 
     private IJSObjectReference? _module;
 
-    public IndexedDbSet(string storeName)
+    public void SetStoreName(string name)
     {
-        _storeName = storeName;
+        _storeName = name;
     }
 
     internal void SetModule(IJSObjectReference module)

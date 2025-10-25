@@ -8,57 +8,46 @@ public abstract class IndexedDbContext : IAsyncDisposable
     private IJSObjectReference? _module;
     private readonly string _databaseName;
     private readonly int _version;
-    private bool _isInitialized;
-    private readonly SemaphoreSlim _initLock = new(1, 1);
 
     protected IndexedDbContext(IJSRuntime jsRuntime, string databaseName, int version = 1)
     {
         _jsRuntime = jsRuntime;
         _databaseName = databaseName;
         _version = version;
+
+        InitializeSets().Wait();
     }
 
-    // Initialize the database - CRITICAL: Must complete before any operations
-    private async Task EnsureInitializedAsync()
+    private async Task InitializeSets()
     {
-        if (_isInitialized) return;
+        _module = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", IndexedDbContext_Consts.Js_path);
 
-        await _initLock.WaitAsync();
-        try
+        var stores = GetStoreDefinitions();
+
+        await _module.InvokeVoidAsync(IndexedDbContext_Consts.InitDatabase, _databaseName, _version, stores);
+
+        var props = GetType()
+            .GetProperties()
+            .Where(prop => prop.PropertyType.IsGenericType
+                && prop.PropertyType.GetGenericTypeDefinition() == typeof(IndexedDbSet<>));
+
+        foreach (var prop in props)
         {
-            if (_isInitialized) return;
+            var setModuleMethod = prop.PropertyType.GetMethod(nameof(IndexedDbSet<object>.SetModule));
+            var setStoreMethod = prop.PropertyType.GetMethod(nameof(IndexedDbSet<object>.SetStoreName));
 
-            _module = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", IndexedDbContext_Consts.Js_path);
-
-            var stores = GetStoreDefinitions();
-
-            // Wait for database to be fully initialized
-            await _module.InvokeVoidAsync(IndexedDbContext_Consts.InitDatabase, _databaseName, _version, stores);
-
-            // Initialize all DbSet modules
-            foreach (var prop in GetType().GetProperties())
+            var dbSet = prop.GetValue(this);
+            if (dbSet == null)
             {
-                if (prop.PropertyType.IsGenericType &&
-                    prop.PropertyType.GetGenericTypeDefinition() == typeof(IndexedDbSet<>))
-                {
-                    var dbSet = prop.GetValue(this);
-                    if (dbSet != null)
-                    {
-                        var setModuleMethod = prop.PropertyType.GetMethod(nameof(IndexedDbSet<object>.SetModule));
-                        setModuleMethod?.Invoke(dbSet, new object[] { _module });
-                    }
-                }
+                dbSet = Activator.CreateInstance(prop.PropertyType);
+                prop.SetValue(this, dbSet);
             }
 
-            _isInitialized = true;
-        }
-        finally
-        {
-            _initLock.Release();
+            setModuleMethod?.Invoke(dbSet, [_module]);
+            setStoreMethod?.Invoke(dbSet, [prop.Name]);
         }
     }
 
-    // Get all DbSet properties
     private List<StoreDefinition> GetStoreDefinitions()
     {
         var stores = new List<StoreDefinition>();
@@ -86,11 +75,8 @@ public abstract class IndexedDbContext : IAsyncDisposable
         return stores;
     }
 
-    // SaveChanges equivalent
     public async Task<int> SaveChangesAsync()
     {
-        await EnsureInitializedAsync();
-
         if (_module == null)
             throw new InvalidOperationException("Database module not initialized");
 
@@ -98,20 +84,21 @@ public abstract class IndexedDbContext : IAsyncDisposable
 
         try
         {
-            foreach (var prop in GetType().GetProperties())
+            var props = GetType()
+                        .GetProperties()
+                        .Where(prop => prop.PropertyType.IsGenericType
+                    && prop.PropertyType.GetGenericTypeDefinition() == typeof(IndexedDbSet<>));
+
+            foreach (var prop in props)
             {
-                if (prop.PropertyType.IsGenericType &&
-                    prop.PropertyType.GetGenericTypeDefinition() == typeof(IndexedDbSet<>))
+                var dbSet = prop.GetValue(this);
+                if (dbSet != null)
                 {
-                    var dbSet = prop.GetValue(this);
-                    if (dbSet != null)
+                    var saveMethod = prop.PropertyType.GetMethod(nameof(IndexedDbSet<object>.SaveChangesAsync));
+                    if (saveMethod != null)
                     {
-                        var saveMethod = prop.PropertyType.GetMethod(nameof(IndexedDbSet<object>.SaveChangesAsync));
-                        if (saveMethod != null)
-                        {
-                            var task = (Task<int>)saveMethod.Invoke(dbSet, [_module])!;
-                            changeCount += await task;
-                        }
+                        var task = (Task<int>)saveMethod.Invoke(dbSet, [_module])!;
+                        changeCount += await task;
                     }
                 }
             }
@@ -126,7 +113,6 @@ public abstract class IndexedDbContext : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _initLock?.Dispose();
         if (_module != null)
         {
             await _module.DisposeAsync();
