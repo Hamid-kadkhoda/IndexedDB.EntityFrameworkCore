@@ -1,4 +1,5 @@
 using Microsoft.JSInterop;
+using System.Reflection;
 
 namespace IndexedDB.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ public abstract class IndexedDbContext : IAsyncDisposable
     private IJSObjectReference? _module;
     private readonly string _databaseName;
     private readonly int _version;
+    private IEnumerable<PropertyInfo> _properties = [];
 
     protected IndexedDbContext(IJSRuntime jsRuntime, string databaseName, int version = 1)
     {
@@ -15,7 +17,7 @@ public abstract class IndexedDbContext : IAsyncDisposable
         _databaseName = databaseName;
         _version = version;
 
-        InitializeSets().Wait();
+        Lazy<Task> lazy = new(InitializeSets);
     }
 
     private async Task InitializeSets()
@@ -26,12 +28,7 @@ public abstract class IndexedDbContext : IAsyncDisposable
 
         await _module.InvokeVoidAsync(IndexedDbContext_Consts.InitDatabase, _databaseName, _version, stores);
 
-        var props = GetType()
-            .GetProperties()
-            .Where(prop => prop.PropertyType.IsGenericType
-                && prop.PropertyType.GetGenericTypeDefinition() == typeof(IndexedDbSet<>));
-
-        foreach (var prop in props)
+        foreach (var prop in GetDbSetProps())
         {
             var setModuleMethod = prop.PropertyType.GetMethod(nameof(IndexedDbSet<object>.SetModule));
             var setStoreMethod = prop.PropertyType.GetMethod(nameof(IndexedDbSet<object>.SetStoreName));
@@ -51,25 +48,20 @@ public abstract class IndexedDbContext : IAsyncDisposable
     private List<StoreDefinition> GetStoreDefinitions()
     {
         var stores = new List<StoreDefinition>();
-        var dbSetType = typeof(IndexedDbSet<>);
 
-        foreach (var prop in GetType().GetProperties())
+        foreach (var prop in GetDbSetProps())
         {
-            if (prop.PropertyType.IsGenericType &&
-                prop.PropertyType.GetGenericTypeDefinition() == dbSetType)
-            {
-                var entityType = prop.PropertyType.GetGenericArguments()[0];
-                var keyProperty = entityType.GetProperties()
-                    .FirstOrDefault(p => p.Name == "Id" ||
-                                       p.GetCustomAttributes(typeof(KeyAttribute), true).Any());
+            var entityType = prop.PropertyType.GetGenericArguments()[0];
+            var keyProperty = entityType.GetProperties()
+                .FirstOrDefault(p => p.Name == "Id" ||
+                                   p.GetCustomAttributes(typeof(KeyAttribute), true).Any());
 
-                stores.Add(new StoreDefinition
-                {
-                    Name = prop.Name,
-                    KeyPath = keyProperty?.Name ?? "Id",
-                    AutoIncrement = keyProperty?.PropertyType == typeof(int) || keyProperty?.PropertyType == typeof(long)
-                });
-            }
+            stores.Add(new StoreDefinition
+            {
+                Name = prop.Name,
+                KeyPath = keyProperty?.Name ?? "Id",
+                AutoIncrement = keyProperty?.PropertyType == typeof(int) || keyProperty?.PropertyType == typeof(long)
+            });
         }
 
         return stores;
@@ -84,12 +76,7 @@ public abstract class IndexedDbContext : IAsyncDisposable
 
         try
         {
-            var props = GetType()
-                        .GetProperties()
-                        .Where(prop => prop.PropertyType.IsGenericType
-                    && prop.PropertyType.GetGenericTypeDefinition() == typeof(IndexedDbSet<>));
-
-            foreach (var prop in props)
+            foreach (var prop in GetDbSetProps())
             {
                 var dbSet = prop.GetValue(this);
                 if (dbSet != null)
@@ -109,6 +96,21 @@ public abstract class IndexedDbContext : IAsyncDisposable
         }
 
         return changeCount;
+    }
+
+    private IEnumerable<PropertyInfo> GetDbSetProps()
+    {
+        if (_properties.Any())
+        {
+            return _properties;
+        }
+
+        _properties = GetType()
+            .GetProperties()
+            .Where(prop => prop.PropertyType.IsGenericType
+                && prop.PropertyType.GetGenericTypeDefinition() == typeof(IndexedDbSet<>));
+
+        return _properties;
     }
 
     public async ValueTask DisposeAsync()
