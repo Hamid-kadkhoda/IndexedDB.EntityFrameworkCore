@@ -17,12 +17,14 @@ public abstract class IndexedDbContext : IAsyncDisposable
         _databaseName = databaseName;
         _version = version;
 
-        Lazy<Task> lazy = new(InitializeSets);
+        InitializeSets();
     }
 
     private async Task InitializeSets()
     {
         _module = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", IndexedDbContext_Consts.Js_path);
+
+        Console.WriteLine(_module);
 
         var stores = GetStoreDefinitions();
 

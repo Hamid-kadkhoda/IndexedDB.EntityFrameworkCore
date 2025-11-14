@@ -2,7 +2,7 @@
 let db = null;
 let dbName = null;
 let dbVersion = null;
-let log = true;
+let log = false;
 
 export function initDatabase(databaseName, version, stores) {
     return new Promise((resolve, reject) => {
