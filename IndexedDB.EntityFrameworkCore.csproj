@@ -1,18 +1,25 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
-  <PropertyGroup>
-    <TargetFrameworks>net10.0</TargetFrameworks>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFrameworks>net10.0</TargetFrameworks>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
 
-  <ItemGroup>
-    <SupportedPlatform Include="browser" />
-  </ItemGroup>
+		<Description>Entity Framework-style ORM for IndexedDB in Blazor WebAssembly. Provides DbContext, DbSet&lt;T&gt;, LINQ queries, and async CRUD with automatic schema management. Enables offline-first apps with type-safe, tracked, and cached local data — ideal for PWAs and client-side storage without server dependency.</Description>
+		<RepositoryUrl>https://github.com/Hamid-kadkhoda/IndexedDB.EntityFrameworkCore</RepositoryUrl>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageTags>blazor; webassembly; wasm; indexeddb; orm; efcore; ef-core; local-storage; pwa; offline</PackageTags>
+		<Title>Blazor IndexedDB ORM</Title>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
-    <PackageReference Include="xunit" Version="2.9.3" />
-  </ItemGroup>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<SupportedPlatform Include="browser" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+		<PackageReference Include="xunit" Version="2.9.3" />
+	</ItemGroup>
 
 </Project>
